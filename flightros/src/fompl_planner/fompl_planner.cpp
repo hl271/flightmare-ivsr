@@ -273,6 +273,7 @@ Eigen::Vector3d FOMPL_Planner::stateToEigen(const ompl::base::State *state) {
   float x = pos->values[0];
   float y = pos->values[1];
   float z = pos->values[2];
+  ROS_INFO_STREAM("states: x: " << x << "; y: " << y << "; z: " << z);
 
   // return a value that is always true but uses the two variables we define, so
   // we avoid compiler warnings
@@ -281,7 +282,8 @@ Eigen::Vector3d FOMPL_Planner::stateToEigen(const ompl::base::State *state) {
   return query_pos;
 }
 
-void FOMPL_Planner::convertOMPLPathToMsg() {
+// ! THIS FUNCTION DOES NOT WORK
+void FOMPL_Planner::convertOMPLPathToMsg() { 
   //Reference &msg -> just another name for last_traj_msg
     mav_planning_msgs::PolynomialTrajectory4D &msg = path_msg_;
     msg.segments.clear();
@@ -293,12 +295,22 @@ void FOMPL_Planner::convertOMPLPathToMsg() {
     size_t N = states.size();
     for (size_t i = 0; i<N; i++) {
         ompl::base::State *p_s = states[i];
-        const double &x_s = p_s->as<ob::RealVectorStateSpace::StateType>()->values[0];
-        const double &y_s = p_s->as<ob::RealVectorStateSpace::StateType>()->values[1];
-        const double &z_s = p_s->as<ob::RealVectorStateSpace::StateType>()->values[2];
+        // ! Unknown error: This type of casting works in DLA2Planner, but not in this case!
+        const double x_s = p_s->as<ob::RealVectorStateSpace::StateType>()->values[0];
+        const double y_s = p_s->as<ob::RealVectorStateSpace::StateType>()->values[1];
+        const double z_s = p_s->as<ob::RealVectorStateSpace::StateType>()->values[2];
+        // const auto *se3state = p_s->as<ob::SE3StateSpace::StateType>();
+        // const auto *pos = se3state->as<ob::RealVectorStateSpace::StateType>(0);
+        std::cout << "Inside convertOMPLToMsg 1" <<std::endl;
+        // float x_s = pos->values[0];
+        // float y_s = pos->values[1];
+        // float z_s = pos->values[2];
+        std::cout << &p_s <<std::endl;
+
         // double z_s = 0.;
         double yaw_s = 0.;
         ROS_INFO_STREAM("states["<< i <<"], x_s: " << x_s << "; y_s: " << y_s << "; z_s: " << z_s);
+        std::cout << "Inside convertOMPLToMsg 2" <<std::endl;
 
         mav_planning_msgs::PolynomialSegment4D segment;
         segment.header = msg.header;
@@ -313,6 +325,34 @@ void FOMPL_Planner::convertOMPLPathToMsg() {
     }
 }
 
+void FOMPL_Planner::convertEigenToMsg() {
+  ROS_INFO_STREAM("convert Eigen to Msg...");
+  mav_planning_msgs::PolynomialTrajectory4D &msg = path_msg_;
+  msg.segments.clear();
+
+  msg.header.stamp = ros::Time::now();
+  msg.header.frame_id = "world"; // "odom"
+  const std::vector<Eigen::Vector3d> &vecs = vecs_;
+  const std::size_t N = vecs.size();
+  for (int i=0; i<N; i++) {
+    float x_s = vecs[i][0];
+    float y_s = vecs[i][1];
+    float z_s = vecs[i][2];
+
+    ROS_INFO_STREAM("states["<< i <<"], x_s: " << x_s << "; y_s: " << y_s << "; z_s: " << z_s);
+    double yaw_s = 0.;
+    mav_planning_msgs::PolynomialSegment4D segment;
+    segment.header = msg.header;
+    segment.num_coeffs = 0;
+    segment.segment_time = ros::Duration(0.);
+    
+    segment.x.push_back(x_s);
+    segment.y.push_back(y_s);
+    segment.z.push_back(z_s);
+    segment.yaw.push_back(yaw_s);
+    msg.segments.push_back(segment);
+  }
+}
 bool FOMPL_Planner::isStateValid(const ob::State *state) {
   // cast the abstract state type to the type we expect
   const auto *se3state = state->as<ob::SE3StateSpace::StateType>();
@@ -532,7 +572,7 @@ void FOMPL_Planner::goalPositionCallback(const geometry_msgs::Point::ConstPtr& p
     std::cout << "Plan & stuff" << std::endl;
     while (!FOMPL_Planner::solution_found) {
       FOMPL_Planner::plan();  
-      FOMPL_Planner::convertOMPLPathToMsg();
+      FOMPL_Planner::convertEigenToMsg();
       FOMPL_Planner::trajectory_pub.publish(path_msg_);
       FOMPL_Planner::visualizeTrajectory();
     }

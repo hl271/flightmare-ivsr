@@ -143,6 +143,7 @@ ros::Publisher trajectory_markers_pub;
 //OMPL Path to Msg
 void convertOMPLPathToMsg();
 mav_planning_msgs::PolynomialTrajectory4D path_msg_;
+void convertEigenToMsg();
 
 
 }  // namespace motion_planning
